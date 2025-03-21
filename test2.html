@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GQR - Grain Quality Robot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f4f4f4;
+            color: #333;
+            line-height: 1.6;
+        }
+        header {
+            background: #4CAF50;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+        }
+        main {
+            padding: 20px;
+            text-align: center;
+        }
+        footer {
+            background: #333;
+            color: #fff;
+            text-align: center;
+            padding: 10px;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            color: #fff;
+            background: #4CAF50;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+        .btn:hover {
+            background: #45a049;
+        }
+        canvas {
+            width: 100%;
+            max-width: 600px;
+            height: 400px;
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+<header>
+    <h1>Grain Quality Robot (GQR)</h1>
+    <p>Automated system for detecting and ensuring the quality of grains</p>
+</header>
+
+<main>
+    <h2>CO<sub>2</sub> Value</h2>
+    <canvas id="chart"></canvas>
+</main>
+
+<footer>
+    &copy; 2025 GQR Project | All Rights Reserved
+</footer>
+
+<script>
+    const ctx = document.getElementById('chart').getContext('2d');
+
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'CO₂ Sensor Value',
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                data: [],
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    display: true,
+                    title: { display: true, text: 'Time' }
+                },
+                y: {
+                    display: true,
+                    title: { display: true, text: 'Sensor Value (ppm)' }
+                }
+            }
+        }
+    });
+
+    function updateChart(data) {
+        if (chart.data.labels.length > 20) {  // Keep the chart clean by limiting to 20 points
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+        }
+
+        chart.data.labels.push(new Date().toLocaleTimeString());
+        chart.data.datasets[0].data.push(data);
+        chart.update();
+    }
+
+    // Simulating real-time data fetching (replace with your backend API endpoint)
+    setInterval(() => {
+        fetch('/data')  // Replace with your actual API endpoint
+            .then(response => response.json())
+            .then(data => {
+                updateChart(data.value);
+            })
+            .catch(error => console.error('Error fetching data:', error));
+    }, 1000);  // Fetch data every second
+</script>
+
+</body>
+</html>
