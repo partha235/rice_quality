@@ -1,9 +1,9 @@
 import socket
 import threading
 import cv2
+import json
 import time
 import random
-import json
 
 # Server configuration
 HOST = ""     # Listen on all interfaces
@@ -18,25 +18,28 @@ print(f"Serving on http://192.168.1.4:{PORT}")
 # Initialize webcam
 camera = cv2.VideoCapture(0)
 
+# Function to simulate CO₂ sensor data (replace with real sensor values)
+def get_sensor_data():
+    """Generates random CO₂ values in ppm"""
+    return random.randint(400, 1000)  # Simulated CO₂ values
+
 # Stream frames to clients
 def stream_video(client_socket):
     """Stream webcam video frames to the client."""
     try:
+        client_socket.sendall(
+            b"HTTP/1.1 200 OK\r\n"
+            b"Content-Type: multipart/x-mixed-replace; boundary=frame\r\n"
+            b"\r\n"
+        )
+        
         while True:
             ret, frame = camera.read()
             if not ret:
                 break
 
-            # Encode the frame to JPEG
             _, buffer = cv2.imencode('.jpg', frame)
             frame_bytes = buffer.tobytes()
-
-            # Send frame headers and data
-            client_socket.sendall(
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: multipart/x-mixed-replace; boundary=frame\r\n"
-                b"\r\n"
-            )
 
             client_socket.sendall(
                 b"--frame\r\n"
@@ -44,27 +47,26 @@ def stream_video(client_socket):
             )
 
             time.sleep(0.05)  # Control frame rate
+
     except BrokenPipeError:
         print("Client disconnected.")
     finally:
         client_socket.close()
 
-# Send fake sensor data
-def send_sensor_data(client_socket):
-    """Send simulated sensor data as JSON."""
+# Handle individual sensor data requests
+def handle_sensor_data(client_socket):
+    """Handle single request for sensor data."""
     try:
-        while True:
-            sensor_value = random.randint(400, 1000)  # Simulated CO₂ values in ppm
-            response = json.dumps({"value": sensor_value})
+        sensor_value = get_sensor_data()  # Generate a random CO₂ value
+        response = json.dumps({"value": sensor_value})
 
-            client_socket.sendall(
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: application/json\r\n"
-                b"Access-Control-Allow-Origin: *\r\n"
-                b"\r\n" +
-                response.encode()
-            )
-            time.sleep(1)
+        client_socket.sendall(
+            b"HTTP/1.1 200 OK\r\n"
+            b"Content-Type: application/json\r\n"
+            b"Access-Control-Allow-Origin: *\r\n"
+            b"\r\n" +
+            response.encode()
+        )
     except BrokenPipeError:
         print("Sensor client disconnected.")
     finally:
@@ -78,7 +80,7 @@ def handle_client(client_socket, addr):
     if "GET /video" in request:
         stream_video(client_socket)
     elif "GET /data" in request:
-        send_sensor_data(client_socket)
+        handle_sensor_data(client_socket)
     else:
         html = """
         <!DOCTYPE html>
