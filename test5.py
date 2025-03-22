@@ -6,14 +6,14 @@ import time
 import random
 
 # Server configuration
-HOST = ""     # Listen on all interfaces
+HOST = "0.0.0.0"        # Listen on all interfaces
 PORT = 8080
 
 # Start the socket server
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((HOST, PORT))
 server_socket.listen(5)
-print(f"Serving on http://192.168.1.4:{PORT}")
+print(f"Serving on http://localhost:{PORT} (accessible on network)")
 
 # Initialize webcam
 camera = cv2.VideoCapture(0)
