@@ -1,6 +1,8 @@
 {
     "cSpell.words": [
         "fourcc",
-        "imshow"
+        "imencode",
+        "imshow",
+        "tobytes"
     ]
 }

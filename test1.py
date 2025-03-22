@@ -5,14 +5,14 @@ import random
 import time
 
 # Server configuration
-HOST = ""     # Listen on all available interfaces
+HOST = "0.0.0.0"  # Listen on all interfaces
 PORT = 8080
 
 # Start the server
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((HOST, PORT))
 server_socket.listen(5)  # Up to 5 clients
-print(f"Serving on http://192.168.1.4:{PORT}")
+print(f"Serving on http://{HOST}:{PORT}")
 
 # Function to simulate CO₂ sensor data (replace with real sensor values)
 def get_sensor_data():
