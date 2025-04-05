@@ -4,6 +4,21 @@ import RPi.GPIO as GPIO
 import json
 import cv2
 
+# ===== Get Local IP (accurate on LAN) =====
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception as e:
+        print("Failed to get local IP:", e)
+        return "127.0.0.1"
+
+LOCAL_IP = get_local_ip()
+PORT = 8080
+
 # ===== GPIO Setup =====
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -17,7 +32,6 @@ MOTOR_PINS = {
 
 MOTOR_PWM = {}
 
-# Initialize motor pins and PWM
 for pin in set(pin for pins in MOTOR_PINS.values() for pin in pins):
     GPIO.setup(pin, GPIO.OUT)
     MOTOR_PWM[pin] = GPIO.PWM(pin, 1000)
@@ -33,13 +47,11 @@ def control_motor(command, speed=100):
         for pin in MOTOR_PINS[command]:
             MOTOR_PWM[pin].ChangeDutyCycle(speed)
 
-# ===== Video Streaming (OpenCV + USB Cam) =====
+# ===== Video Streaming =====
 camera = cv2.VideoCapture(0)
 
 def stream_video(client_socket):
-    client_socket.sendall(
-        b"HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n"
-    )
+    client_socket.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n")
     while True:
         ret, frame = camera.read()
         if not ret:
@@ -47,18 +59,16 @@ def stream_video(client_socket):
         _, jpeg = cv2.imencode('.jpg', frame)
         frame_data = jpeg.tobytes()
         try:
-            client_socket.sendall(
-                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_data + b"\r\n"
-            )
+            client_socket.sendall(b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_data + b"\r\n")
         except:
             break
 
-# ===== HTML Control Page =====
+# ===== HTML Page =====
 def serve_html(client_socket):
     html = """
     <html>
     <head>
-        <title>Motor Control + Camera</title>
+        <title>Robot Control</title>
         <script>
             let timeout;
             let hold = false;
@@ -88,18 +98,16 @@ def serve_html(client_socket):
         </script>
     </head>
     <body>
-        <h1>Raspberry Pi Robot</h1>
-        <img src="/video" width="640"><br><br>
-        <button onmousedown="holdCommand('forward')" onmouseup="releaseCommand()">⬆️ Forward</button><br><br>
-        <button onmousedown="holdCommand('left')" onmouseup="releaseCommand()">⬅️ Left</button>
-        <button onmousedown="holdCommand('right')" onmouseup="releaseCommand()">➡️ Right</button><br><br>
-        <button onmousedown="holdCommand('backward')" onmouseup="releaseCommand()">⬇️ Backward</button>
+        <h1>Robot Control</h1>
+        <img src="/video" width="640"><br>
+        <button onmousedown="holdCommand('forward')" onmouseup="releaseCommand()">⬆️</button><br>
+        <button onmousedown="holdCommand('left')" onmouseup="releaseCommand()">⬅️</button>
+        <button onmousedown="holdCommand('right')" onmouseup="releaseCommand()">➡️</button><br>
+        <button onmousedown="holdCommand('backward')" onmouseup="releaseCommand()">⬇️</button>
     </body>
     </html>
     """
-    client_socket.sendall(
-        b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n" + html.encode()
-    )
+    client_socket.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n" + html.encode())
 
 # ===== Client Handler =====
 def handle_client(client_socket, addr):
@@ -111,9 +119,7 @@ def handle_client(client_socket, addr):
             data = request.split('\r\n')[-1]
             cmd_data = json.loads(data)
             control_motor(cmd_data.get("command"), cmd_data.get("speed", 100))
-            client_socket.sendall(
-                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\": \"ok\"}"
-            )
+            client_socket.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\": \"ok\"}")
         else:
             serve_html(client_socket)
     except Exception as e:
@@ -121,33 +127,20 @@ def handle_client(client_socket, addr):
     finally:
         client_socket.close()
 
-# ===== IP Address Helper =====
-def get_ip_address():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        # Doesn't have to be reachable
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-    except:
-        ip = '127.0.0.1'
-    finally:
-        s.close()
-    return ip
+# ===== Server Setup =====
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.bind((LOCAL_IP, PORT))
+server_socket.listen(5)
 
-# ===== Server =====
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('0.0.0.0', 8080))
-server.listen(5)
-
-local_ip = get_ip_address()
-print(f"✅ Server started at http://{local_ip}:8080")
+print(f"\n🚀 Server running at: http://{LOCAL_IP}:{PORT}/\n")
 
 try:
     while True:
-        client_sock, addr = server.accept()
-        threading.Thread(target=handle_client, args=(client_sock, addr)).start()
+        client_socket, addr = server_socket.accept()
+        threading.Thread(target=handle_client, args=(client_socket, addr)).start()
 except KeyboardInterrupt:
     print("\n🛑 Shutting down...")
+finally:
     GPIO.cleanup()
-    server.close()
+    server_socket.close()
     camera.release()
