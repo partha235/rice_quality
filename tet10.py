@@ -1,10 +1,11 @@
 import socket
 import threading
-import RPi.GPIO as GPIO
-import json
 import cv2
+import json
+import time
+import random
 
-# ===== Get Local IP (accurate on LAN) =====
+# Get local IP address
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -12,135 +13,182 @@ def get_local_ip():
         ip = s.getsockname()[0]
         s.close()
         return ip
-    except Exception as e:
-        print("Failed to get local IP:", e)
+    except Exception:
         return "127.0.0.1"
 
-LOCAL_IP = get_local_ip()
 PORT = 8080
+LOCAL_IP = get_local_ip()
 
-# ===== GPIO Setup =====
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
-
-MOTOR_PINS = {
-    "forward": (17, 18),
-    "backward": (22, 23),
-    "left": (17, 23),
-    "right": (18, 22),
-}
-
-MOTOR_PWM = {}
-
-for pin in set(pin for pins in MOTOR_PINS.values() for pin in pins):
-    GPIO.setup(pin, GPIO.OUT)
-    MOTOR_PWM[pin] = GPIO.PWM(pin, 1000)
-    MOTOR_PWM[pin].start(0)
-
-def stop_motors():
-    for pwm in MOTOR_PWM.values():
-        pwm.ChangeDutyCycle(0)
-
-def control_motor(command, speed=100):
-    stop_motors()
-    if command in MOTOR_PINS:
-        for pin in MOTOR_PINS[command]:
-            MOTOR_PWM[pin].ChangeDutyCycle(speed)
-
-# ===== Video Streaming =====
-camera = cv2.VideoCapture(0)
-
-def stream_video(client_socket):
-    client_socket.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n")
-    while True:
-        ret, frame = camera.read()
-        if not ret:
-            continue
-        _, jpeg = cv2.imencode('.jpg', frame)
-        frame_data = jpeg.tobytes()
-        try:
-            client_socket.sendall(b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_data + b"\r\n")
-        except:
-            break
-
-# ===== HTML Page =====
-def serve_html(client_socket):
-    html = """
-    <html>
-    <head>
-        <title>Robot Control</title>
-        <script>
-            let timeout;
-            let hold = false;
-
-            function sendCommand(cmd, speed=100) {
-                fetch('/command', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ command: cmd, speed: speed })
-                });
-                clearTimeout(timeout);
-                if (!hold && cmd !== "stop") {
-                    timeout = setTimeout(() => sendCommand("stop", 0), 200);
-                }
-            }
-
-            function holdCommand(cmd, speed=100) {
-                hold = true;
-                sendCommand(cmd, speed);
-            }
-
-            function releaseCommand() {
-                hold = false;
-                clearTimeout(timeout);
-                sendCommand("stop", 0);
-            }
-        </script>
-    </head>
-    <body>
-        <h1>Robot Control</h1>
-        <img src="/video" width="640"><br>
-        <button onmousedown="holdCommand('forward')" onmouseup="releaseCommand()">⬆️</button><br>
-        <button onmousedown="holdCommand('left')" onmouseup="releaseCommand()">⬅️</button>
-        <button onmousedown="holdCommand('right')" onmouseup="releaseCommand()">➡️</button><br>
-        <button onmousedown="holdCommand('backward')" onmouseup="releaseCommand()">⬇️</button>
-    </body>
-    </html>
-    """
-    client_socket.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n" + html.encode())
-
-# ===== Client Handler =====
-def handle_client(client_socket, addr):
-    try:
-        request = client_socket.recv(1024).decode()
-        if "GET /video" in request:
-            stream_video(client_socket)
-        elif "POST /command" in request:
-            data = request.split('\r\n')[-1]
-            cmd_data = json.loads(data)
-            control_motor(cmd_data.get("command"), cmd_data.get("speed", 100))
-            client_socket.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\": \"ok\"}")
-        else:
-            serve_html(client_socket)
-    except Exception as e:
-        print("Error:", e)
-    finally:
-        client_socket.close()
-
-# ===== Server Setup =====
+# Start socket server
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((LOCAL_IP, PORT))
 server_socket.listen(5)
 
-print(f"\n🚀 Server running at: http://{LOCAL_IP}:{PORT}/\n")
+print(f"\n🔥 Server running at: http://{LOCAL_IP}:{PORT}\n")
 
+# Initialize camera
+camera = cv2.VideoCapture(0)
+
+def get_sensor_data():
+    return random.randint(400, 1000)
+
+def handle_robot_command(client_socket, command):
+    print(f"Robot Command Received: {command}")
+    client_socket.sendall(
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Access-Control-Allow-Origin: *\r\n\r\n"
+        b'{"status": "command received"}'
+    )
+    client_socket.close()
+
+def stream_video(client_socket):
+    try:
+        client_socket.sendall(
+            b"HTTP/1.1 200 OK\r\n"
+            b"Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n"
+        )
+        while camera.isOpened():
+            ret, frame = camera.read()
+            if not ret:
+                break
+            _, buffer = cv2.imencode('.jpg', frame)
+            frame_bytes = buffer.tobytes()
+            client_socket.sendall(
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+            )
+            time.sleep(0.05)
+    except:
+        print("Video stream closed.")
+    finally:
+        client_socket.close()
+
+def handle_sensor_data(client_socket):
+    value = get_sensor_data()
+    response = json.dumps({"value": value})
+    client_socket.sendall(
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Access-Control-Allow-Origin: *\r\n\r\n" +
+        response.encode()
+    )
+    client_socket.close()
+
+def handle_client(client_socket, addr):
+    print(f"Connected by {addr}")
+    try:
+        request = client_socket.recv(1024).decode()
+        if "GET /video" in request:
+            stream_video(client_socket)
+        elif "GET /data" in request:
+            handle_sensor_data(client_socket)
+        elif "POST /command" in request:
+            command = request.split('\r\n')[-1]
+            handle_robot_command(client_socket, command)
+        else:
+            html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grain Quality Robot - Webcam & Control</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {{ font-family: Arial; text-align: center; background: #f4f4f4; margin: 0; padding: 0; }}
+        header {{ background: #4CAF50; color: white; padding: 20px; }}
+        img {{ width: 80%; max-width: 800px; margin: 20px; border: 5px solid #4CAF50; box-shadow: 0 0 10px #888; }}
+        canvas {{ width: 80%; max-width: 800px; height: 400px; margin: 20px auto; display: block; }}
+        button {{ font-size: 24px; padding: 15px 30px; margin: 10px; }}
+        .controls {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 300px; margin: 20px auto; }}
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Grain Quality Robot - Webcam & Control</h1>
+    </header>
+    <h2>Access from another device</h2>
+    <a href="http://{LOCAL_IP}:{PORT}" target="_blank">📱 Open on iPhone: http://{LOCAL_IP}:{PORT}</a>
+    <h2>Live Webcam Stream</h2>
+    <img src="/video" alt="Webcam Stream">
+    <h2>Robot Controls</h2>
+    <div class="controls">
+        <button onclick="sendCommand('UP')">⬆️ Forward</button>
+        <button onclick="sendCommand('LEFT')">⬅️ Left</button>
+        <button onclick="sendCommand('RIGHT')">➡️ Right</button>
+        <button onclick="sendCommand('DOWN')">⬇️ Backward</button>
+    </div>
+    <h2>Real-time CO₂ Monitoring</h2>
+    <canvas id="chart"></canvas>
+
+    <script>
+        const ctx = document.getElementById('chart').getContext('2d');
+        const chart = new Chart(ctx, {{
+            type: 'line',
+            data: {{
+                labels: [],
+                datasets: [{{
+                    label: 'CO₂ (ppm)',
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    data: [],
+                    fill: true
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                scales: {{
+                    x: {{ display: true, title: {{ display: true, text: 'Time' }} }},
+                    y: {{ display: true, title: {{ display: true, text: 'CO₂ (ppm)' }} }}
+                }}
+            }}
+        }});
+
+        function updateChart(data) {{
+            if (chart.data.labels.length > 20) {{
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }}
+            chart.data.labels.push(new Date().toLocaleTimeString());
+            chart.data.datasets[0].data.push(data);
+            chart.update();
+        }}
+
+        function sendCommand(command) {{
+            fetch('/command', {{
+                method: 'POST',
+                body: command
+            }}).then(res => res.json())
+              .then(d => console.log(d))
+              .catch(err => console.error(err));
+        }}
+
+        setInterval(() => {{
+            fetch('/data')
+                .then(res => res.json())
+                .then(data => updateChart(data.value))
+                .catch(err => console.error(err));
+        }}, 1000);
+    </script>
+</body>
+</html>"""
+            client_socket.sendall(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/html\r\n"
+                b"Access-Control-Allow-Origin: *\r\n\r\n" +
+                html.encode()
+            )
+    except Exception as e:
+        print("Client error:", e)
+    finally:
+        client_socket.close()
+
+# Main loop
 try:
     while True:
-        client_socket, addr = server_socket.accept()
-        threading.Thread(target=handle_client, args=(client_socket, addr)).start()
+        client_sock, addr = server_socket.accept()
+        threading.Thread(target=handle_client, args=(client_sock, addr)).start()
 except KeyboardInterrupt:
-    print("\n🛑 Shutting down...")
-finally:
-    GPIO.cleanup()
-    server_socket.close()
+    print("Server shutting down...")
     camera.release()
+    server_socket.close()
