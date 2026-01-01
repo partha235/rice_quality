@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Grain Quality Robot - Webcam & Control</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial; background: #f4f4f4; text-align: center; margin: 0; }
+    header { background: #4CAF50; color: white; padding: 20px; }
+    img, canvas { width: 80%; max-width: 800px; margin: 20px auto; display: block; }
+    button { font-size: 24px; padding: 15px 30px; margin: 10px; }
+    .controls { display: grid; grid-template-columns: repeat(3, 1fr); width: 300px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Grain Quality Robot - Webcam & Control</h1>
+  </header>
+
+  <h2>Access on Mobile</h2>
+  <a href="http://{LOCAL_IP}:{PORT}">http://{LOCAL_IP}:{PORT}</a>
+
+  <h2>Webcam Stream</h2>
+  <img src="/video" alt="Webcam Stream">
+
+  <h2>Robot Controls</h2>
+  <div class="controls">
+    <button onclick="sendCommand('UP')">⬆️</button>
+    <button onclick="sendCommand('LEFT')">⬅️</button>
+    <button onclick="sendCommand('RIGHT')">➡️</button>
+    <button onclick="sendCommand('DOWN')">⬇️</button>
+  </div>
+
+  <h2>CO₂ Monitoring</h2>
+  <canvas id="chart"></canvas>
+
+  <script>
+    const ctx = document.getElementById('chart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'CO₂ (ppm)',
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          data: [],
+          fill: true
+        }]
+      },
+      options: {
+        scales: {
+          x: { title: { display: true, text: 'Time' }},
+          y: { title: { display: true, text: 'CO₂ (ppm)' }}
+        }
+      }
+    });
+
+    function updateChart(value) {
+      if (chart.data.labels.length > 20) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      chart.data.labels.push(new Date().toLocaleTimeString());
+      chart.data.datasets[0].data.push(value);
+      chart.update();
+    }
+
+    function sendCommand(cmd) {
+      fetch('/command', { method: 'POST', body: cmd });
+    }
+
+    setInterval(() => {
+      fetch('/data')
+        .then(res => res.json())
+        .then(data => updateChart(data.value));
+    }, 1000);
+  </script>
+</body>
+</html>
