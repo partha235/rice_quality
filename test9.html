@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Medi-car</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { 
+            background-color: darkslategray; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            flex-direction: column;
+        }
+        h1 { 
+            color: rgb(137, 185, 226); 
+        }
+        .sensor-data {
+            margin-top: 20px;
+            color: white;
+            text-align: center;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        button {
+            display: inline-block;
+            padding: 20px;
+            font-size: 20px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            color: white;
+            background-color: #4CAF50;
+            border-radius: 5px;
+        }
+        .arrow-up::before {
+            content: "↑";
+        }
+        .arrow-down::before {
+            content: "↓";
+        }
+        .arrow-left::before {
+            content: "←";
+        }
+        .arrow-right::before {
+            content: "→";
+        }
+    </style>
+    <script>
+        function sendRequest(command) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/?action=" + command, true);
+            xhr.send();
+        }
+    </script>
+</head>
+<body>
+    <h1>Medi-car</h1>
+    <div class="button-container">
+        <button class="arrow-up" onmousedown="sendRequest('forward')" onmouseup="sendRequest('stop')"></button>
+    </div>
+    <div class="button-container">
+        <button class="arrow-left" onmousedown="sendRequest('left')" onmouseup="sendRequest('stop')"></button>
+        <button class="arrow-right" onmousedown="sendRequest('right')" onmouseup="sendRequest('stop')"></button>
+    </div>
+    <div class="button-container">
+        <button class="arrow-down" onmousedown="sendRequest('backward')" onmouseup="sendRequest('stop')"></button>
+    </div>
+    <div class="sensor-data">
+        <p>Temperature: """ + str(temp) + """ °C</p>
+        <p>Heart Rate: """ + str(heart_rate) + """ BPM</p>
+        <p>Gas Concentration: """ + str(gas_concentration) + """ %</p>
+    </div>
+</body>
+</html>

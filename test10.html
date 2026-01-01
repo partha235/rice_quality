@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grain Quality Robot - Webcam & Control</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f4; margin: 0; padding: 0; }
+        header { background: #4CAF50; color: white; padding: 20px; }
+        img { width: 80%; max-width: 800px; margin: 20px; border: 5px solid #4CAF50; box-shadow: 0 0 10px #888; }
+        canvas { width: 80%; max-width: 800px; height: 400px; margin: 20px auto; display: block; }
+        button { font-size: 24px; padding: 15px; margin: 10px; width: 80px; height: 80px; }
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 300px; margin: 20px auto; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Grain Quality Robot - Webcam & Control</h1>
+    </header>
+    
+    <h2>Live Webcam Stream</h2>
+    <img src="/video" alt="Webcam Stream">
+
+    <h2>Robot Controls</h2>
+    <div class="controls">
+        <div></div> 
+        <button 
+            onmousedown="sendCommand('forward')" 
+            onmouseup="sendCommand('stop')" 
+            ontouchstart="sendCommand('forward')" 
+            ontouchend="sendCommand('stop')"
+        >⬆️</button> 
+        <div></div>
+    
+        <button 
+            onmousedown="sendCommand('left')" 
+            onmouseup="sendCommand('stop')" 
+            ontouchstart="sendCommand('left')" 
+            ontouchend="sendCommand('stop')"
+        >⬅️</button>
+        <div></div>
+    
+        <button 
+            onmousedown="sendCommand('right')" 
+            onmouseup="sendCommand('stop')" 
+            ontouchstart="sendCommand('right')" 
+            ontouchend="sendCommand('stop')"
+        >➡️</button>
+    
+        <div></div> 
+        <button 
+            onmousedown="sendCommand('backward')" 
+            onmouseup="sendCommand('stop')" 
+            ontouchstart="sendCommand('backward')" 
+            ontouchend="sendCommand('stop')"
+        >⬇️</button>
+        <div></div>
+    </div>
+    
+
+    <h2>Static CO₂ Graph</h2>
+    <canvas id="chart"></canvas>
+    
+    <script>
+        const ctx = document.getElementById('chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ["10:00", "10:05", "10:10", "10:15", "10:20"],
+                datasets: [{
+                    label: 'CO₂ (ppm)',
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    data: [400, 420, 410, 430, 415],
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { display: true, title: { display: true, text: 'Time' } },
+                    y: { display: true, title: { display: true, text: 'CO₂ (ppm)' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
